@@ -15,14 +15,9 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-/**
- * Shared with Phase 6 (briefing/product-cycle generation). This branch (Phase 7)
- * only reads/updates status; creation (createMorningBriefing etc.) is Phase 6's
- * responsibility — see Docs/BACKEND_DESIGN.md §2.6 and the Phase 6 prompt in
- * Docs/IMPLEMENTATION_PLAN.md.
- */
 @Entity
 @Table(name = "notifications")
 public class Notification {
@@ -35,10 +30,12 @@ public class Notification {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    /** Only set for PRODUCT_CYCLE notifications. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id")
     private Product product;
 
+    /** Only set for MORNING_BRIEFING / HOMECOMING_BRIEFING notifications. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "daily_recommendation_id")
     private DailyRecommendation dailyRecommendation;
@@ -50,12 +47,16 @@ public class Notification {
     @Column(nullable = false)
     private String title;
 
-    @Column(nullable = false, length = 1000)
+    @Column(nullable = false, length = 2000)
     private String content;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private NotificationStatus status;
+
+    /** Date part of createdAt, used for duplicate-prevention queries. */
+    @Column(nullable = false)
+    private LocalDate date;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
@@ -65,28 +66,25 @@ public class Notification {
     protected Notification() {
     }
 
-    public Notification(
-            User user,
-            NotificationType type,
-            String title,
-            String content,
-            Product product,
-            DailyRecommendation dailyRecommendation
-    ) {
+    public Notification(User user, NotificationType type, String title, String content,
+                        DailyRecommendation dailyRecommendation, Product product) {
         this.user = user;
         this.type = type;
         this.title = title;
         this.content = content;
-        this.product = product;
         this.dailyRecommendation = dailyRecommendation;
+        this.product = product;
         this.status = NotificationStatus.PENDING;
+        this.date = LocalDate.now();
         this.createdAt = LocalDateTime.now();
     }
 
-    public void markProcessed(NotificationStatus status) {
-        this.status = status;
+    public void updateStatus(NotificationStatus newStatus) {
+        this.status = newStatus;
         this.processedAt = LocalDateTime.now();
     }
+
+    // --- Getters ---
 
     public Long getId() {
         return id;
@@ -118,6 +116,10 @@ public class Notification {
 
     public NotificationStatus getStatus() {
         return status;
+    }
+
+    public LocalDate getDate() {
+        return date;
     }
 
     public LocalDateTime getCreatedAt() {

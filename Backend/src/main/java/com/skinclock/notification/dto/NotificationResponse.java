@@ -15,7 +15,6 @@ public record NotificationResponse(
         LocalDateTime createdAt,
         LocalDateTime processedAt
 ) {
-
     public static NotificationResponse from(Notification notification) {
         return new NotificationResponse(
                 notification.getId(),
