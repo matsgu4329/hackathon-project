@@ -18,12 +18,16 @@ import com.skinclock.weather.WeatherService;
 import com.skinclock.weather.WeatherSnapshot;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class NotificationService {
@@ -40,6 +44,7 @@ public class NotificationService {
     private final WeatherService weatherService;
     private final ProductRepository productRepository;
     private final UserService userService;
+    private final NotificationService self;
 
     public NotificationService(
             NotificationRepository notificationRepository,
@@ -48,7 +53,8 @@ public class NotificationService {
             DailyRecommendationRepository dailyRecommendationRepository,
             WeatherService weatherService,
             ProductRepository productRepository,
-            UserService userService
+            UserService userService,
+            @Lazy NotificationService self
     ) {
         this.notificationRepository = notificationRepository;
         this.routineLogRepository = routineLogRepository;
@@ -57,6 +63,37 @@ public class NotificationService {
         this.weatherService = weatherService;
         this.productRepository = productRepository;
         this.userService = userService;
+        this.self = self;
+    }
+
+    /**
+     * Two requests for the same (user, date, dedupeKey) can both miss the
+     * "already exists?" check and race to insert (e.g. dashboard, notification
+     * center and history all mounting their own "ensure today's briefing
+     * exists" call around the same time). The DB unique constraint on
+     * Notification catches the loser; this recovers by re-reading the
+     * winner's row in a fresh transaction instead of failing the request. See
+     * RecommendationService.generateOrRetry for why the retry must go through
+     * {@code self} and run in its own REQUIRES_NEW transaction rather than
+     * catch-and-continue in the one that failed.
+     */
+    private Notification saveOrGetExisting(Notification notification) {
+        try {
+            return self.saveNew(notification);
+        } catch (DataIntegrityViolationException lostRace) {
+            return self.findExisting(notification.getUser(), notification.getDate(), notification.getDedupeKey())
+                    .orElseThrow(() -> lostRace);
+        }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Notification saveNew(Notification notification) {
+        return notificationRepository.save(notification);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public Optional<Notification> findExisting(User user, LocalDate date, String dedupeKey) {
+        return notificationRepository.findByUserAndDateAndDedupeKey(user, date, dedupeKey);
     }
 
     // ─────────────────────────────────────────────
@@ -94,7 +131,7 @@ public class NotificationService {
 
         Notification notification = new Notification(
                 user, NotificationType.MORNING_BRIEFING, title, content, recommendation, null);
-        notification = notificationRepository.save(notification);
+        notification = saveOrGetExisting(notification);
 
         log.info("Created MORNING_BRIEFING notification id={} for user {}", notification.getId(), clientUserId);
         return NotificationResponse.from(notification);
@@ -160,7 +197,7 @@ public class NotificationService {
 
         Notification notification = new Notification(
                 user, NotificationType.HOMECOMING_BRIEFING, title, content, recommendation, null);
-        notification = notificationRepository.save(notification);
+        notification = saveOrGetExisting(notification);
 
         log.info("Created HOMECOMING_BRIEFING notification id={} for user {}", notification.getId(), clientUserId);
         return NotificationResponse.from(notification);
@@ -224,7 +261,7 @@ public class NotificationService {
 
             Notification notification = new Notification(
                     user, NotificationType.PRODUCT_CYCLE, title, content, null, product);
-            notification = notificationRepository.save(notification);
+            notification = saveOrGetExisting(notification);
 
             log.info("Created PRODUCT_CYCLE notification id={} for product '{}' (user {})",
                     notification.getId(), product.getName(), clientUserId);

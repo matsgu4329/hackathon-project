@@ -176,28 +176,35 @@
 
 ---
 
-## Phase 8. 프론트엔드 통합 & 시뮬레이터 마감 — 🎨 프론트 전용 (백엔드 담당자는 해당 없음)
+## Phase 8. 프론트엔드 통합 & 시뮬레이터 마감 ✅ (2026-08-14, 실제 API 연동까지 완료)
 
-`frontend.md`에 정의된 화면/컴포넌트를 백엔드 API와 연결합니다.
+`frontend.md`에 정의된 화면/컴포넌트를 백엔드 API와 연결합니다. 팀원이 화면(온보딩/대시보드/제품)과 시뮬레이터, API 클라이언트 뼈대(`api.ts`, localStorage 폴백)를 먼저 만들었고, 그 시점엔 Phase 5~7 백엔드가 없어 `useDailyRecommendation`/`useNotifications` 훅이 client-only mock으로 남아 있었음. 백엔드가 다 끝난 뒤 이 mock을 실제 API로 교체하고 누락된 화면을 채움 (백엔드 담당이 대신 작업, 팀원과 사전 합의).
 
-1. Zustand `SituationState` 스토어 구현 (모의 귀가/UV/날씨 상태) — Phase 6 트리거와 연동
-2. TanStack Query로 서버 데이터 캐싱/동기화 (제품, 추천, 알림, 이행 기록)
-3. `localStorage`/`IndexedDB` 동기화 — H2 재시작 시에도 온보딩/제품 데이터 UX 유지 (frontend.md 6.2)
-4. 반응형 레이아웃(Mobile First) 및 44px 터치 타겟 적용
-5. 의료 면책 조항 배너 전 화면 하단 노출
+1. [x] Zustand `SituationState` 스토어 (모의 귀가/UV/날씨) — 그대로 유지, `useDailyRecommendation`이 이 값을 실제 `POST /api/weather/mock` + `POST /api/recommendations/today/refresh` 호출로 연결하도록 교체 (시뮬레이터 버튼이 진짜 백엔드 파이프라인을 움직임)
+2. [x] `useNotifications`를 `GET /api/notifications` / `POST /api/situations/homecoming` / `PATCH .../status`로 교체, 최초 마운트 시 `POST /api/notifications/morning-briefing/trigger` 자동 호출(백엔드 dedup으로 안전)
+3. [x] TanStack Query로 서버 데이터 캐싱/동기화 (제품, 추천, 알림, 이행 기록) — 기존 패턴 유지
+4. [x] `localStorage` 폴백 — 온보딩/제품은 팀원이 이미 구현 (API 실패 시 캐시 사용)
+5. [x] **신규**: `/notifications`(알림 센터), `/history`(이행 리포트: 스트릭·월간 완료율·캘린더 히트맵) 화면 추가 — 기존에 훅만 있고 화면이 없던 부분
+6. [x] 대시보드 헤더에 알림 배지·히스토리 링크 추가
+7. [x] `lucide-react` 의존성 설치 누락 발견 및 수정 (package.json엔 있었으나 `npm install` 누락으로 빌드 실패 상태였음)
+8. [ ] 반응형/44px 터치 타겟, IndexedDB, 웹 푸시 3단계 폴백은 팀원 원안 그대로 — 이번 작업 범위 밖
 
 ---
 
-## Phase 9. 통합 테스트 & 데모 준비 — 공통
+## Phase 9. 통합 테스트 & 데모 준비 ✅ 1차 완료 (2026-08-14)
 
-1. **엔드투엔드 시나리오 테스트**: 온보딩 → 제품 등록 → 귀가 모의 입력 → 알림 수신 → 루틴 완료 처리 → 히스토리 확인
-2. **리스크 대응 점검** (SPEC 리스크 섹션 기준):
-   - 외부 날씨 API 장애 시 기본값 폴백 동작 확인 (🔧 백엔드)
-   - 웹 푸시 미지원/거부 환경에서 인앱 알림 정상 동작 확인 (🎨 프론트)
-   - 하루 알림 상한 및 중복 알림 방지 규칙 동작 확인 (🔧 백엔드)
-   - H2 인메모리 DB 재시작 시 데이터 소실 안내 문구 노출 확인 (🎨 프론트)
-3. **핵심 지표(KPI) 측정 포인트 로깅**: 루틴 완료율, 알림 반응률, 귀가 알림 성공률 등 SPEC 핵심 지표 계산에 필요한 이벤트 로그 확보 (🔧 백엔드)
-4. 데모 리허설: 발표 중 실시간으로 귀가/UV 변경 시연 가능한지 확인 (공통)
+1. [x] **엔드투엔드 시나리오 테스트**: Playwright로 실제 브라우저를 headless 구동 — 온보딩 → 제품(레티놀) 등록 → 대시보드(실제 추천 반영 확인) → UV 시뮬레이터 변경(백엔드 재계산 확인) → 귀가 모의 입력 → 알림 센터에서 완료 처리 → 히스토리에서 반영 확인까지 전 구간 통과, 콘솔/네트워크 에러 0건
+2. [x] **테스트 중 실제 동시성 버그 2건 발견 및 수정** (Phase 5/6 코드):
+   - `RecommendationService`: 동일 사용자·당일 추천을 두 요청이 동시에 만들려 하면 `(user_id, date)` unique 제약 위반으로 500 → `REQUIRES_NEW` 트랜잭션 분리 + 실패한 쪽이 새 트랜잭션에서 재조회하도록 수정 (`generateOrRetry`/`generateSafely`/`fetchExisting`, self-injection 패턴)
+   - `NotificationService`: 알림 중복 방지가 DB 제약 없이 "조회 후 없으면 생성"만 하던 구조라 동시 요청 시 중복 행이 실제로 생성되고, 이후 "유일 결과" 조회가 `NonUniqueResultException`으로 깨짐 → `Notification`에 `dedupeKey`(브리핑은 타입명, 제품주기는 `타입:제품ID`) + `(user_id, date, dedupe_key)` unique 제약 추가, 동일한 REQUIRES_NEW 재시도 패턴 적용
+   - 두 버그 모두 재현 조건은 "같은 사용자로 짧은 시간에 여러 요청이 겹치는 상황"이라 React 개발 모드의 이중 렌더링뿐 아니라 여러 탭/재요청에서도 실제로 발생 가능했음 — Phase 9가 아니었으면 데모 중 발견했을 가능성이 높음
+3. **리스크 대응 점검** (SPEC 리스크 섹션 기준):
+   - [x] 외부 날씨 API 장애 시 기본값 폴백 동작 확인 (🔧 백엔드) — Phase 4에서 KMA→Open-Meteo→캐시→하드코딩 기본값 순으로 이미 구현/확인됨
+   - [ ] 웹 푸시 미지원/거부 환경에서 인앱 알림 정상 동작 확인 (🎨 프론트) — 웹 푸시 자체가 스트레치 목표라 미착수
+   - [x] 하루 알림 상한 및 중복 알림 방지 규칙 동작 확인 (🔧 백엔드) — 위 동시성 수정으로 실제 중복 생성 케이스까지 커버
+   - [ ] H2 인메모리 DB 재시작 시 데이터 소실 안내 문구 노출 확인 (🎨 프론트) — 미확인
+4. **핵심 지표(KPI) 측정 포인트 로깅**: 별도 이벤트 로그는 아직 없음, `RoutineLog`/`Notification` 테이블 자체가 완료율·반응률 계산에 필요한 원자료를 이미 가지고 있어 추가 집계 쿼리로 커버 가능 — 미착수 (🔧 백엔드)
+5. [ ] 데모 리허설: 발표 중 실시간 귀가/UV 변경 시연 — Playwright 테스트로 해당 플로우 자체는 검증됐으나, 실제 발표 리허설은 팀 차원에서 별도 진행 필요
 
 ---
 

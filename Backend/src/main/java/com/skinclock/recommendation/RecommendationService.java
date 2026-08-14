@@ -9,12 +9,16 @@ import com.skinclock.profile.UserProfileRepository;
 import com.skinclock.recommendation.dto.DailyRecommendationResponse;
 import com.skinclock.user.User;
 import com.skinclock.user.UserService;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class RecommendationService {
@@ -28,31 +32,67 @@ public class RecommendationService {
     private final ProductRepository productRepository;
     private final DailyRecommendationRepository dailyRecommendationRepository;
     private final TodayWeatherProvider todayWeatherProvider;
+    private final RecommendationService self;
 
     public RecommendationService(
             UserService userService,
             UserProfileRepository userProfileRepository,
             ProductRepository productRepository,
             DailyRecommendationRepository dailyRecommendationRepository,
-            TodayWeatherProvider todayWeatherProvider
+            TodayWeatherProvider todayWeatherProvider,
+            @Lazy RecommendationService self
     ) {
         this.userService = userService;
         this.userProfileRepository = userProfileRepository;
         this.productRepository = productRepository;
         this.dailyRecommendationRepository = dailyRecommendationRepository;
         this.todayWeatherProvider = todayWeatherProvider;
+        this.self = self;
     }
 
     @Transactional
     public DailyRecommendationResponse getToday(String clientUserId) {
         return dailyRecommendationRepository.findByUser_ClientUserIdAndDate(clientUserId, LocalDate.now())
                 .map(DailyRecommendationResponse::from)
-                .orElseGet(() -> generate(clientUserId));
+                .orElseGet(() -> generateOrRetry(clientUserId));
     }
 
     @Transactional
     public DailyRecommendationResponse refreshToday(String clientUserId) {
+        return generateOrRetry(clientUserId);
+    }
+
+    /**
+     * Two concurrent requests for the same user+day (e.g. React StrictMode's
+     * double-effect in dev, or two tabs) can both miss the initial read and
+     * race to insert; the loser hits the (user, date) unique constraint.
+     *
+     * The retry must run in a brand-new transaction/EntityManager, not just
+     * catch-and-continue in the one that failed — once a Hibernate session
+     * has seen a flush exception it's unusable for anything further ("Entry
+     * ... has a null identifier ... session is flushed after an exception
+     * occurs"). So generateSafely()'s failure is left to propagate and roll
+     * back cleanly, and the retry read (fetchExisting) runs in its own
+     * REQUIRES_NEW transaction. Both must go through the {@code self} proxy —
+     * a direct call would bypass Spring's transaction interception entirely.
+     */
+    private DailyRecommendationResponse generateOrRetry(String clientUserId) {
+        try {
+            return self.generateSafely(clientUserId);
+        } catch (DataIntegrityViolationException lostRace) {
+            return self.fetchExisting(clientUserId).orElseThrow(() -> lostRace);
+        }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public DailyRecommendationResponse generateSafely(String clientUserId) {
         return generate(clientUserId);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public Optional<DailyRecommendationResponse> fetchExisting(String clientUserId) {
+        return dailyRecommendationRepository.findByUser_ClientUserIdAndDate(clientUserId, LocalDate.now())
+                .map(DailyRecommendationResponse::from);
     }
 
     private DailyRecommendationResponse generate(String clientUserId) {

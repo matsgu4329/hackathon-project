@@ -21,6 +21,9 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     /** Find all notifications for a user (Phase 7 listing). */
     List<Notification> findAllByUser_ClientUserIdOrderByCreatedAtDesc(String clientUserId);
 
+    /** Dedupe lookup backing the (user_id, date, dedupe_key) unique constraint. */
+    Optional<Notification> findByUserAndDateAndDedupeKey(User user, LocalDate date, String dedupeKey);
+
     /** Ownership check for Phase 7 status updates. */
     Optional<Notification> findByIdAndUser_ClientUserId(Long id, String clientUserId);
 }
