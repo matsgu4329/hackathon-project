@@ -123,9 +123,20 @@ java -jar target/skinclock-backend-0.0.1-SNAPSHOT.jar
 
 팀 구성: **프론트엔드 담당 1명**, **백엔드 담당 2명**. 아래에서 본인 파트를 찾아 프롬프트를 순서대로 Agent(Claude Code 등)에게 붙여넣으면 됩니다. 각 프롬프트는 이전 단계 결과물을 전제로 하므로 순서를 건너뛰지 마세요.
 
+> ⚠️ **3명 모두 시작 전에 지켜주세요** (2026-08-14: 백엔드 팀원이 이걸 안 지켜서 저장소 루트에 중복 프로젝트가 생겼다가 정리된 적이 있습니다):
+> 1. 작업 시작 전 **반드시 `git pull origin main`으로 최신 상태를 받은 뒤** 시작하세요.
+> 2. 백엔드는 **`Backend/` 폴더 안에서만** 작업합니다. 저장소 루트나 다른 위치에 새 프로젝트(`build.gradle`, 새 `src/` 등)를 만들지 마세요.
+> 3. 본인 이름을 딴 새 브랜치를 만들어 작업하고, 끝나면 main으로 병합(PR 또는 merge)하세요. `main`에 바로 커밋하지 마세요.
+
 ---
 
 ### 🎨 프론트엔드 담당자용
+
+**0) 브랜치 준비**
+```
+git checkout main && git pull origin main
+git checkout -b feature/frontend-onboarding-products
+```
 
 **1) 개발 환경 확인**
 ```
@@ -170,11 +181,21 @@ TanStack Query 훅으로 분리해서 나중에 실제 API로 쉽게 교체할 �
 
 > ⚠️ **중요**: 백엔드 프로젝트는 `Backend/` 폴더 **하나만** 사용합니다(Maven, Spring Boot 4.1.0, `com.skinclock.*` 패키지). 저장소 루트에 별도로 `build.gradle`/`src/`를 만들어 새 프로젝트를 초기화하지 마세요 — 실제로 그렇게 커밋된 적이 있어서(2026-08-14) 정리했습니다. `Backend/`에는 이미 온보딩·제품 API가 동작하는 상태이니, 새로 합류하면 반드시 그 위에서 이어가 주세요.
 
-**0) 저장소 받기 + 개발 환경 준비**
+**0) 저장소 받기 + 브랜치 + 개발 환경 준비**
 
-먼저 사람이 직접: 저장소를 `git clone`(또는 `git pull`)해서 최신 상태로 받아주세요. 그다음 아래 프롬프트를 Agent에게 붙여넣으면 환경 설치부터 빌드 확인까지 자동으로 해줍니다.
+먼저 사람이 직접 최신 상태를 받고 본인 브랜치를 만들어주세요 (아직 로컬에 저장소가 없다면 clone부터).
+```
+git clone https://github.com/matsgu4329/hackathon-project.git   # 이미 있으면 생략
+cd hackathon-project
+git checkout main && git pull origin main
+git checkout -b feature/phase4-weather   # 또는 feature/phase5-recommendation, 본인이 맡을 phase로
+```
+
+그다음 아래 프롬프트를 Agent에게 붙여넣으면 환경 설치부터 빌드 확인까지 자동으로 해줍니다.
 ```
 이 저장소(SkinClock)의 Backend/ 프로젝트를 빌드하고 실행할 수 있는 환경을 준비해줘.
+지금 git 브랜치가 main이 아니라 feature/... 브랜치인지 먼저 확인해줘 (git branch --show-current).
+main이면 작업을 시작하지 말고 나한테 알려줘 — 브랜치를 먼저 만들어야 해.
 
 - JDK 25(Temurin)가 설치되어 있는지 확인하고, 없으면 설치해줘
   (Windows라면 winget install --id EclipseAdoptium.Temurin.25.JDK -e --accept-package-agreements --accept-source-agreements).
@@ -187,10 +208,13 @@ TanStack Query 훅으로 분리해서 나중에 실제 API로 쉽게 교체할 �
 
 **1) 작업 나누기 (사람이 직접 조율)**
 
-Phase 5(추천 로직)는 원래 Phase 4(날씨 API)가 끝나야 완전해지지만, **mock 날씨 값으로 먼저 개발을 시작할 수 있습니다.** 그래서 백엔드 두 명이 아래 두 작업을 동시에 진행할 수 있습니다. 팀원과 상의해서 둘 중 하나를 맡아주세요 (나머지 하나는 내가 진행).
+Phase 5(추천 로직)는 원래 Phase 4(날씨 API)가 끝나야 완전해지지만, **mock 날씨 값으로 먼저 개발을 시작할 수 있습니다.** 그래서 백엔드 두 명이 아래 두 작업을 동시에, 각자 다른 브랜치에서 진행할 수 있습니다. 팀원과 상의해서 둘 중 하나를 맡아주세요 (나머지 하나는 내가 진행).
 
-**Phase 4를 맡는 경우**
+**Phase 4를 맡는 경우** (브랜치: `feature/phase4-weather`)
 ```
+지금 작업 중인 브랜치가 main이 아니라 feature/phase4-weather인지 먼저 확인해줘. 아니면 멈추고 알려줘.
+이 저장소의 Backend/ 프로젝트 안에서만 작업해줘 — 새 프로젝트를 만들거나 저장소 루트를 건드리지 마.
+
 Docs/IMPLEMENTATION_PLAN.md의 Phase 4(날씨·자외선 정보 수집)와
 Docs/BACKEND_DESIGN.md의 §2.4(WeatherSnapshot), §3.3(API)을 읽고 구현해줘.
 
@@ -204,8 +228,11 @@ Docs/BACKEND_DESIGN.md의 §2.4(WeatherSnapshot), §3.3(API)을 읽고 구현해
   그대로 따라줘 (기존 코드가 참고 예시).
 ```
 
-**Phase 5를 맡는 경우 (mock 날씨로 먼저 시작)**
+**Phase 5를 맡는 경우 (mock 날씨로 먼저 시작, 브랜치: `feature/phase5-recommendation`)**
 ```
+지금 작업 중인 브랜치가 main이 아니라 feature/phase5-recommendation인지 먼저 확인해줘. 아니면 멈추고 알려줘.
+이 저장소의 Backend/ 프로젝트 안에서만 작업해줘 — 새 프로젝트를 만들거나 저장소 루트를 건드리지 마.
+
 Docs/IMPLEMENTATION_PLAN.md의 Phase 5(개인화 일일 스킨케어 추천)와
 Docs/BACKEND_DESIGN.md §2.5(DailyRecommendation/RecommendationStep), §3.4(API)를 읽고 구현해줘.
 
@@ -218,4 +245,4 @@ Docs/BACKEND_DESIGN.md §2.5(DailyRecommendation/RecommendationStep), §3.4(API)
 - Phase 2/3에서 쓴 패키지 구조와 ApiResponse/ErrorResponse 공통 응답 포맷을 그대로 따라줘.
 ```
 
-> 두 작업 모두 `com.skinclock.product.Product`, `com.skinclock.profile.UserProfile`을 읽기 전용으로 참조합니다. 같은 파일을 동시에 수정할 일은 거의 없지만, 시작 전에 서로 어떤 파일/패키지를 건드릴 예정인지 짧게 공유하고 진행하면 충돌을 피할 수 있습니다.
+> 두 작업 모두 `com.skinclock.product.Product`, `com.skinclock.profile.UserProfile`을 읽기 전용으로 참조하고, 새 패키지(`weather`, `recommendation`)만 추가하므로 파일 충돌 가능성은 낮습니다. 그래도 브랜치를 나눠서 작업하고, 각자 끝나면 main으로 병합(PR 또는 fast-forward merge)하는 사람이 직접 확인 후 진행해주세요. Phase 5 쪽이 나중에 Phase 4의 실제 WeatherSnapshot을 연결해야 하니, Phase 4가 먼저 병합되면 Phase 5 담당자가 그 위에서 mock 부분을 실제 호출로 교체하면 됩니다.
