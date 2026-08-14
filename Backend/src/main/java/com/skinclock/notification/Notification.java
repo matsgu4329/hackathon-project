@@ -14,12 +14,16 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "notifications")
+@Table(
+        name = "notifications",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "date", "dedupe_key"})
+)
 public class Notification {
 
     @Id
@@ -58,6 +62,18 @@ public class Notification {
     @Column(nullable = false)
     private LocalDate date;
 
+    /**
+     * Disambiguates same-day duplicates per type: briefings are one-per-day
+     * ("MORNING_BRIEFING"), PRODUCT_CYCLE is one-per-product-per-day
+     * ("PRODUCT_CYCLE:42"). Needed because a plain (user, type, date) unique
+     * constraint would either wrongly block multiple products' cycle
+     * notifications on the same day, or (if product_id is included directly)
+     * silently fail to dedupe briefings — most SQL engines treat every NULL
+     * as distinct in a unique index, so two NULL product_ids never collide.
+     */
+    @Column(name = "dedupe_key", nullable = false)
+    private String dedupeKey;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -76,6 +92,7 @@ public class Notification {
         this.product = product;
         this.status = NotificationStatus.PENDING;
         this.date = LocalDate.now();
+        this.dedupeKey = product != null ? type.name() + ":" + product.getId() : type.name();
         this.createdAt = LocalDateTime.now();
     }
 
@@ -120,6 +137,10 @@ public class Notification {
 
     public LocalDate getDate() {
         return date;
+    }
+
+    public String getDedupeKey() {
+        return dedupeKey;
     }
 
     public LocalDateTime getCreatedAt() {

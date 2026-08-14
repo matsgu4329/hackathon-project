@@ -1,5 +1,8 @@
 import { ApiResponse, UserProfileRequest, UserProfileResponse } from '../types/profile';
 import { ProductRequest, ProductResponse } from '../types/product';
+import { DailyRecommendation, TimeSlot } from '../types/recommendation';
+import { NotificationItem, NotificationStatus, NotificationType } from '../types/notification';
+import { RoutineLogEntry, RoutineLogSummary } from '../types/routine';
 import {
   getClientUserId,
   getProfileFromStorage,
@@ -286,5 +289,180 @@ export async function deleteProduct(id: number): Promise<void> {
 
   const existing = getProductsFromStorage() || [];
   saveProductsToStorage(existing.filter((p: ProductResponse) => p.id !== id));
+}
+
+/* =========================================================================
+ * Weather API (Phase 4) — backs the dashboard simulator
+ * ========================================================================= */
+
+export interface WeatherSnapshotResponse {
+  id: number;
+  weatherState: 'CLEAR' | 'CLOUDY' | 'RAIN' | 'DRY';
+  uvIndex: number;
+  humidity: number | null;
+  temperature: number | null;
+  fetchedAt: string;
+  isFallback: boolean;
+  source: string;
+}
+
+export async function getCurrentWeather(): Promise<WeatherSnapshotResponse> {
+  return fetchWithAuth<WeatherSnapshotResponse>('/api/weather/current', { method: 'GET' });
+}
+
+/**
+ * Pushes the FE simulator's chosen weather/UV into the backend (Phase 4's
+ * demo endpoint), so the ScenarioSimulatorBar actually drives the real
+ * recommendation engine instead of a client-only mock.
+ */
+export async function pushMockWeather(
+  weatherState: WeatherSnapshotResponse['weatherState'],
+  uvIndex: number,
+  humidity?: number,
+  temperature?: number
+): Promise<WeatherSnapshotResponse> {
+  return fetchWithAuth<WeatherSnapshotResponse>('/api/weather/mock', {
+    method: 'POST',
+    body: JSON.stringify({ weatherState, uvIndex, humidity, temperature }),
+  });
+}
+
+/* =========================================================================
+ * Daily Recommendation API (Phase 5)
+ * ========================================================================= */
+
+interface BackendRecommendationStep {
+  stepOrder: number;
+  timeSlot: TimeSlot;
+  description: string;
+  warningBadge: string | null;
+  relatedProductId: number | null;
+  relatedProductName: string | null;
+}
+
+interface BackendDailyRecommendation {
+  date: string;
+  cleansingMethod: string;
+  weatherConditionUsed: WeatherSnapshotResponse['weatherState'];
+  uvIndexUsed: number;
+  disclaimer: string;
+  steps: BackendRecommendationStep[];
+}
+
+function mapRecommendation(raw: BackendDailyRecommendation, humidity: number): DailyRecommendation {
+  return {
+    date: raw.date,
+    cleansingMethod: raw.cleansingMethod,
+    weatherSummary: {
+      weatherState: raw.weatherConditionUsed,
+      uvIndex: raw.uvIndexUsed,
+      humidity,
+    },
+    steps: raw.steps.map((step) => ({
+      id: `${raw.date}-${step.stepOrder}`,
+      stepOrder: step.stepOrder,
+      timeSlot: step.timeSlot,
+      description: step.description,
+      productId: step.relatedProductId,
+      productName: step.relatedProductName || undefined,
+      warningBadge: step.warningBadge,
+    })),
+    disclaimer: raw.disclaimer,
+  };
+}
+
+async function withHumidity(raw: BackendDailyRecommendation): Promise<DailyRecommendation> {
+  const weather = await getCurrentWeather().catch(() => null);
+  return mapRecommendation(raw, weather?.humidity ?? 50);
+}
+
+export async function getTodayRecommendation(): Promise<DailyRecommendation> {
+  const raw = await fetchWithAuth<BackendDailyRecommendation>('/api/recommendations/today', {
+    method: 'GET',
+  });
+  return withHumidity(raw);
+}
+
+export async function refreshTodayRecommendation(): Promise<DailyRecommendation> {
+  const raw = await fetchWithAuth<BackendDailyRecommendation>('/api/recommendations/today/refresh', {
+    method: 'POST',
+  });
+  return withHumidity(raw);
+}
+
+/* =========================================================================
+ * Notification API (Phase 6 + 7)
+ * ========================================================================= */
+
+interface BackendNotification {
+  id: number;
+  type: NotificationType;
+  title: string;
+  content: string;
+  status: NotificationStatus;
+  createdAt: string;
+  processedAt: string | null;
+}
+
+function mapNotification(n: BackendNotification): NotificationItem {
+  return {
+    id: n.id,
+    type: n.type,
+    title: n.title,
+    content: n.content,
+    status: n.status,
+    createdAt: n.createdAt,
+    processedAt: n.processedAt,
+  };
+}
+
+export async function getNotifications(): Promise<NotificationItem[]> {
+  const data = await fetchWithAuth<BackendNotification[]>('/api/notifications', { method: 'GET' });
+  return data.map(mapNotification);
+}
+
+/** 귀가 모의 입력 → 귀가 브리핑 알림 즉시 생성 */
+export async function triggerHomecomingBriefing(): Promise<NotificationItem> {
+  const data = await fetchWithAuth<BackendNotification>('/api/situations/homecoming', {
+    method: 'POST',
+  });
+  return mapNotification(data);
+}
+
+/** 당일 없으면 생성, 있으면 기존 알림 반환 (중복 방지는 백엔드가 처리) */
+export async function triggerMorningBriefing(): Promise<NotificationItem> {
+  const data = await fetchWithAuth<BackendNotification>('/api/notifications/morning-briefing/trigger', {
+    method: 'POST',
+  });
+  return mapNotification(data);
+}
+
+export async function updateNotificationStatus(
+  id: number | string,
+  status: 'COMPLETED' | 'LATER' | 'DISMISSED'
+): Promise<NotificationItem> {
+  const data = await fetchWithAuth<BackendNotification>(`/api/notifications/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+  return mapNotification(data);
+}
+
+/* =========================================================================
+ * Routine Log API (Phase 7) — /history screen
+ * ========================================================================= */
+
+export async function getRoutineLogsSummary(yearMonth: string): Promise<RoutineLogSummary> {
+  return fetchWithAuth<RoutineLogSummary>(
+    `/api/routine-logs/summary?yearMonth=${encodeURIComponent(yearMonth)}`,
+    { method: 'GET' }
+  );
+}
+
+export async function getRoutineLogs(from: string, to: string): Promise<RoutineLogEntry[]> {
+  return fetchWithAuth<RoutineLogEntry[]>(
+    `/api/routine-logs?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    { method: 'GET' }
+  );
 }
 

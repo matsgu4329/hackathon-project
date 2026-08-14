@@ -81,6 +81,29 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Notifications link */}
+            <Link
+              href="/notifications"
+              className="relative text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-all"
+              title="알림 센터"
+            >
+              <Bell className="w-3.5 h-3.5" />
+              {pendingNotificationsCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center">
+                  {pendingNotificationsCount}
+                </span>
+              )}
+            </Link>
+
+            {/* History link */}
+            <Link
+              href="/history"
+              className="text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-all"
+              title="이행 리포트"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+            </Link>
+
             {/* Products link */}
             <Link
               href="/products"
