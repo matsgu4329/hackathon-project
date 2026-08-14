@@ -228,6 +228,8 @@ erDiagram
 
 - `/history` 화면의 캘린더 히트맵·스트릭 계산은 이 테이블을 날짜별로 집계해서 산출 (별도 집계 테이블 없이 쿼리로 계산, MVP 데이터량 기준 충분)
 
+> **구현 노트 (Phase 5)**: Phase 4(WeatherSnapshot)보다 먼저 구현되어, 날씨 조회를 `TodayWeatherProvider` 인터페이스(`com.skinclock.recommendation`)로 분리하고 처음엔 `MockTodayWeatherProvider`(CLEAR, UV 7 고정)로 구현했습니다. Phase 4가 main에 merge된 뒤 `RealTodayWeatherProvider`(`com.skinclock.weather.WeatherService` 호출)로 교체 완료 — `RecommendationService`는 수정하지 않았습니다.
+
 ---
 
 ## 3. API 명세
