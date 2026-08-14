@@ -135,7 +135,7 @@
 
 ---
 
-## Phase 6. 아침·귀가 브리핑 알림 생성 — SPEC 기능 5
+## Phase 6. 아침·귀가 브리핑 알림 생성 — SPEC 기능 5 🚧 진행 중 (팀원, `feature/phase6-notification`)
 
 > Phase 5의 추천 결과를 알림 형태로 변환.
 
@@ -152,16 +152,19 @@
 
 ---
 
-## Phase 7. 웹 알림 확인 및 루틴 이행 기록 — SPEC 기능 6
+## Phase 7. 웹 알림 확인 및 루틴 이행 기록 — SPEC 기능 6 ✅ 백엔드 완료 (2026-08-14)
 
-> Phase 6에서 생성된 알림을 사용자가 소비하고 처리하는 마지막 단계.
+> Phase 6에서 생성된 알림을 사용자가 소비하고 처리하는 마지막 단계. **Phase 6이 아직 main에 없는 상태에서 병행 진행** — `com.skinclock.notification.Notification` 엔티티는 팀원의 Phase 6 프롬프트/`BACKEND_DESIGN.md` §2.6과 동일한 스펙으로 이 브랜치(`feature/phase7-notification-history`)에서 먼저 만들었습니다. Phase 6이 merge될 때 `Notification.java`/`NotificationRepository.java`/`NotificationController.java` 3개 파일에서 **작은 병합 충돌이 예상**됩니다 (같은 파일에 각자 다른 메서드를 추가한 상태 — 두 브랜치의 메서드를 합치기만 하면 됨, 지난 Gradle 중복 사고처럼 프로젝트 전체가 겹치는 게 아님).
 
 ### 🔧 백엔드
-1. 알림 목록 조회 API (`GET /api/notifications`, 유형/내용/생성 시각)
-2. 알림 상태 처리 API (`PATCH /api/notifications/{id}/status`): 완료 / 나중에 확인 / 닫힘
-3. `RoutineLog` 기록: 날짜, 알림 유형, 처리 시각, 완료 상태
-4. 이행 기록 조회 API (`GET /api/routine-logs`, `GET /api/routine-logs/summary`)
-5. (선택) 웹 푸시 구독 저장 API (`POST /api/push/subscriptions`) — 실제 푸시 발송은 스트레치 목표
+1. [x] `Notification` 엔티티/Repository/enum(`NotificationType`, `NotificationStatus`) — Phase 6과 공유하는 스펙대로 구현 (생성 로직 자체는 Phase 6 담당)
+2. [x] 알림 목록 조회 API (`GET /api/notifications`, `status`/`type` 쿼리 필터)
+3. [x] 알림 상태 처리 API (`PATCH /api/notifications/{id}/status`): COMPLETED / LATER / DISMISSED (PENDING으로는 되돌릴 수 없도록 검증)
+4. [x] `RoutineLog` 엔티티/Repository (`com.skinclock.routine`, notification당 1건 upsert) — 날짜, 알림 유형, 처리 시각, 완료 상태 기록
+5. [x] 이행 기록 조회 API (`GET /api/routine-logs?from&to`, `GET /api/routine-logs/summary?yearMonth`) — 캘린더 히트맵용 일자별 COMPLETE/PARTIAL/NONE, 스트릭(최근 90일 기준 연속 COMPLETE 일수), 월간 완료율 계산
+6. [x] 사용자별 데이터 격리: 소유자 아닌 알림 상태 변경 시 404
+7. [x] **테스트 방식**: Phase 6의 알림 생성 트리거 API가 아직 없어 curl 대신 MockMvc 통합 테스트(`NotificationRoutineLogIntegrationTest`)로 Repository에 직접 시드 → 목록/필터/상태변경/PENDING 거부/이행기록/요약/타사용자격리까지 전부 검증 (`./mvnw.cmd test` 통과)
+8. [ ] (선택) 웹 푸시 구독 저장 API (`POST /api/push/subscriptions`) — 스트레치 목표, 미구현
 
 ### 🎨 프론트엔드 (참고용)
 - `/notifications`(알림 센터), `/history`(이행 리포트, 캘린더 히트맵)
