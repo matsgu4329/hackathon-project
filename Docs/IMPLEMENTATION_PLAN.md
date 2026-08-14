@@ -94,16 +94,17 @@
 
 ---
 
-## Phase 4. 날씨·자외선 정보 수집 — SPEC 기능 4
+## Phase 4. 날씨·자외선 정보 수집 — SPEC 기능 4 ✅ 백엔드 완료 (2026-08-14, 팀원 담당)
 
 > 외부 API 연동은 리스크가 크므로 Phase 2/3와 병행 착수 권장 (일정상 여유가 있다면 가장 먼저 붙여도 무방).
 
 ### 🔧 백엔드
-1. 외부 날씨/자외선 API 조사 및 연동 (기상청 API 또는 유사 오픈 API)
-2. Spring `@Scheduled` 기반 1시간 주기 수집 배치 구현
-3. `WeatherSnapshot` 엔티티/저장 로직 (weatherState, uvIndex, fetchedAt)
-4. **장애 대응**: API 실패 시 마지막 정상 데이터 또는 사전 정의 기본값 사용하는 폴백 로직
-5. 현재 적용 정보 + 마지막 갱신 시각 조회 API (`GET /api/weather/current`)
+1. [x] 외부 날씨/자외선 API 연동: **기상청(KMA) API 우선, 서비스키 없거나 실패 시 Open-Meteo로 자동 폴백** (`com.skinclock.weather.client`)
+2. [x] `WeatherScheduler` — 앱 시작 시 1회 + 이후 `@Scheduled(fixedRate = 1h)`로 자동 수집
+3. [x] `WeatherSnapshot` 엔티티 (weatherState, uvIndex, humidity, temperature, 좌표, fetchedAt, isFallback, source)
+4. [x] **장애 대응**: KMA 실패 → Open-Meteo → 그마저 실패하면 마지막 정상 스냅샷을 fallback 플래그로 재저장, 이력 자체가 없으면 `WeatherSnapshot.defaultFallback()` 하드코딩 기본값
+5. [x] `GET /api/weather/current`, `POST /api/weather/refresh`
+6. [x] (스펙 이상 추가 구현) `POST /api/weather/mock` — 프론트 시뮬레이터/데모용 날씨·UV 수동 주입 엔드포인트
 
 ### 🎨 프론트엔드 (참고용)
 - 대시보드 상단 날씨·자외선 위젯(`<WeatherUvWidget/>`) — UV 등급별 컬러 배지, 갱신 시각 표시
@@ -114,9 +115,9 @@
 
 ---
 
-## Phase 5. 개인화 일일 스킨케어 추천 엔진 — SPEC 기능 3 ✅ 백엔드 완료 (2026-08-14, mock 날씨 기준)
+## Phase 5. 개인화 일일 스킨케어 추천 엔진 — SPEC 기능 3 ✅ 백엔드 완료 (2026-08-14, 실제 날씨 연동까지 완료)
 
-> Phase 2(개인 설정) + Phase 3(보유 제품) + Phase 4(날씨) 결과를 종합하는 핵심 로직. Phase 4가 아직 안 끝나서 **mock 날씨 값(CLEAR, UV 7)** 으로 먼저 구현했습니다. `feature/phase5-recommendation` 브랜치.
+> Phase 2(개인 설정) + Phase 3(보유 제품) + Phase 4(날씨) 결과를 종합하는 핵심 로직. Phase 4가 끝나기 전에 mock 날씨(CLEAR, UV 7)로 먼저 구현한 뒤, Phase 4가 main에 merge된 직후 `feature/phase5-recommendation`에 `origin/main`을 merge하고 실제 날씨로 교체 완료.
 
 ### 🔧 백엔드
 1. [x] 추천 규칙 정의 및 구현 (`com.skinclock.recommendation.RecommendationService`): UV≥6 → 자외선 차단 강조 / 날씨 DRY → 보습 한 겹 추가 / 레티놀·AHA_BHA 보유 제품(Product.nightOnly) → NIGHT 슬롯 + `NIGHT_ONLY` 배지로 취침 전 안내
@@ -124,8 +125,8 @@
 3. [x] 제품 사용 주기 도래 여부 반영 (Phase 3의 `Product.nextUseDate(today)` 그대로 재사용)
 4. [x] 결과에 "일반적인 생활 관리 안내" 문구(면책 조항) 포함 — `disclaimer` 필드
 5. [x] `GET /api/recommendations/today` (당일 1건 캐시, 없으면 생성) / `POST /api/recommendations/today/refresh` (강제 재계산)
-6. [x] **Phase 4 연동 지점 분리**: 날씨 조회를 `TodayWeatherProvider` 인터페이스로 분리하고 `MockTodayWeatherProvider`(CLEAR·UV 7 고정)로 구현해둠. Phase 4가 끝나면 이 인터페이스의 실제 구현체로 교체만 하면 됨 — `RecommendationService` 등 나머지 코드는 안 건드려도 됨
-7. [x] curl 스모크 테스트: 온보딩 전 404, 프로필+제품 등록 후 추천 생성(높은 UV/야간전용 배지/주기 도래 제품 반영 확인), 재조회 시 캐시(중복 생성 없음), refresh 정상, 타 사용자 격리
+6. [x] **Phase 4 연동 완료**: `TodayWeatherProvider` 인터페이스의 구현체를 `MockTodayWeatherProvider`(고정값) → `RealTodayWeatherProvider`(`com.skinclock.weather.WeatherService` 호출, `WeatherState`→`WeatherCondition` 매핑)로 교체. `RecommendationService`는 전혀 수정하지 않음 — 설계한 대로 인터페이스 뒤에서만 교체됨
+7. [x] curl 스모크 테스트: 온보딩 전 404, 실제 Open-Meteo 날씨(CLOUDY·UV1)로 추천 생성 확인, `/api/weather/mock`으로 UV 9 주입 후 refresh 시 자외선 차단 문구로 즉시 반영 확인, 레티놀 NIGHT_ONLY 배지·캐시·타 사용자 격리 모두 재확인
 
 ### 🎨 프론트엔드 (참고용)
 - 대시보드(`/dashboard`) 오늘의 추천 루틴 카테고리(아침/귀가 후/취침 전) 및 체크리스트
