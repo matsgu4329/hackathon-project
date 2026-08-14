@@ -1,7 +1,9 @@
 import { UserProfileResponse, UserProfileRequest } from '../types/profile';
+import { ProductResponse } from '../types/product';
 
 const USER_ID_KEY = 'skinclock_client_user_id';
 const PROFILE_KEY = 'skinclock_profile_cache';
+const PRODUCTS_KEY = 'skinclock_products_cache';
 
 /**
  * Get or create a persistent client UUID for X-User-Id header.
@@ -51,6 +53,33 @@ export function getProfileFromStorage(): UserProfileResponse | null {
     return JSON.parse(raw) as UserProfileResponse;
   } catch (err) {
     console.warn('Failed to parse cached profile from localStorage', err);
+    return null;
+  }
+}
+
+/**
+ * Cache products locally for offline persistence.
+ */
+export function saveProductsToStorage(products: ProductResponse[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+  } catch (err) {
+    console.warn('Failed to save products to localStorage', err);
+  }
+}
+
+/**
+ * Retrieve cached products from localStorage.
+ */
+export function getProductsFromStorage(): ProductResponse[] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(PRODUCTS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as ProductResponse[];
+  } catch (err) {
+    console.warn('Failed to parse cached products from localStorage', err);
     return null;
   }
 }

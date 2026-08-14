@@ -1,5 +1,12 @@
 import { ApiResponse, UserProfileRequest, UserProfileResponse } from '../types/profile';
-import { getClientUserId, getProfileFromStorage, saveProfileToStorage } from './storage';
+import { ProductRequest, ProductResponse } from '../types/product';
+import {
+  getClientUserId,
+  getProfileFromStorage,
+  saveProfileToStorage,
+  getProductsFromStorage,
+  saveProductsToStorage,
+} from './storage';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -32,6 +39,11 @@ async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Pr
       // ignore json parse error
     }
     throw new Error(errorMsg);
+  }
+
+  // 204 No Content for DELETE
+  if (response.status === 204) {
+    return {} as T;
   }
 
   const json: ApiResponse<T> = await response.json();
@@ -77,7 +89,6 @@ export async function getProfile(): Promise<UserProfileResponse> {
  * Save / Upsert user profile.
  */
 export async function saveProfile(request: UserProfileRequest): Promise<UserProfileResponse> {
-  // Always update local cache for instant offline persistence
   saveProfileToStorage(request);
 
   try {
@@ -129,3 +140,151 @@ export async function updateProfile(request: UserProfileRequest): Promise<UserPr
     onboardingCompleted: true,
   };
 }
+
+/* =========================================================================
+ * Product CRUD API Methods
+ * ========================================================================= */
+
+/**
+ * Fetch all registered products for current user.
+ */
+export async function getProducts(): Promise<ProductResponse[]> {
+  try {
+    const data = await fetchWithAuth<ProductResponse[]>('/api/products', {
+      method: 'GET',
+    });
+    if (data) {
+      saveProductsToStorage(data);
+      return data;
+    }
+  } catch (err) {
+    console.warn('API getProducts failed, using localStorage fallback if available:', err);
+  }
+
+  const cached = getProductsFromStorage();
+  if (cached && Array.isArray(cached)) {
+    return cached;
+  }
+
+  return [];
+}
+
+/**
+ * Fetch single product by ID.
+ */
+export async function getProduct(id: number): Promise<ProductResponse> {
+  try {
+    return await fetchWithAuth<ProductResponse>(`/api/products/${id}`, {
+      method: 'GET',
+    });
+  } catch (err) {
+    console.warn(`API getProduct(${id}) failed:`, err);
+    const cached = getProductsFromStorage() || [];
+    const found = cached.find((p: ProductResponse) => p.id === id);
+    if (found) return found;
+    throw err;
+  }
+}
+
+/**
+ * Create a new product.
+ */
+export async function createProduct(request: ProductRequest): Promise<ProductResponse> {
+  try {
+    const data = await fetchWithAuth<ProductResponse>('/api/products', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+    if (data) {
+      const existing = getProductsFromStorage() || [];
+      saveProductsToStorage([...existing.filter((p: ProductResponse) => p.id !== data.id), data]);
+      return data;
+    }
+  } catch (err) {
+    console.warn('API createProduct failed, saving locally:', err);
+  }
+
+  // Local fallback mock creation
+  const isNightOnly =
+    request.ingredientTags?.includes('RETINOL') ||
+    request.ingredientTags?.includes('AHA_BHA') ||
+    false;
+
+  const mockCreated: ProductResponse = {
+    id: Date.now(),
+    name: request.name,
+    usageStep: request.usageStep,
+    ingredientTags: request.ingredientTags || [],
+    cycleType: request.cycleType,
+    cycleIntervalDays: request.cycleIntervalDays || null,
+    cycleWeekdays: request.cycleWeekdays || null,
+    nightOnly: isNightOnly,
+    lastUsedAt: request.lastUsedAt || null,
+    nextUseDate: new Date().toISOString().split('T')[0],
+  };
+
+  const existing = getProductsFromStorage() || [];
+  saveProductsToStorage([...existing, mockCreated]);
+  return mockCreated;
+}
+
+/**
+ * Update an existing product.
+ */
+export async function updateProduct(
+  id: number,
+  request: ProductRequest
+): Promise<ProductResponse> {
+  try {
+    const data = await fetchWithAuth<ProductResponse>(`/api/products/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    });
+    if (data) {
+      const existing = getProductsFromStorage() || [];
+      saveProductsToStorage(existing.map((p: ProductResponse) => (p.id === id ? data : p)));
+      return data;
+    }
+  } catch (err) {
+    console.warn(`API updateProduct(${id}) failed, saving locally:`, err);
+  }
+
+  const isNightOnly =
+    request.ingredientTags?.includes('RETINOL') ||
+    request.ingredientTags?.includes('AHA_BHA') ||
+    false;
+
+  const mockUpdated: ProductResponse = {
+    id,
+    name: request.name,
+    usageStep: request.usageStep,
+    ingredientTags: request.ingredientTags || [],
+    cycleType: request.cycleType,
+    cycleIntervalDays: request.cycleIntervalDays || null,
+    cycleWeekdays: request.cycleWeekdays || null,
+    nightOnly: isNightOnly,
+    lastUsedAt: request.lastUsedAt || null,
+    nextUseDate: new Date().toISOString().split('T')[0],
+  };
+
+  const existing = getProductsFromStorage() || [];
+  saveProductsToStorage(existing.map((p: ProductResponse) => (p.id === id ? mockUpdated : p)));
+  return mockUpdated;
+}
+
+/**
+ * Delete a product by ID.
+ */
+export async function deleteProduct(id: number): Promise<void> {
+  try {
+    await fetchWithAuth<void>(`/api/products/${id}`, {
+      method: 'DELETE',
+    });
+  } catch (err) {
+    console.warn(`API deleteProduct(${id}) failed:`, err);
+  }
+
+  const existing = getProductsFromStorage() || [];
+  saveProductsToStorage(existing.filter((p: ProductResponse) => p.id !== id));
+}
+
