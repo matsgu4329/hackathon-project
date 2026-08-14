@@ -234,8 +234,14 @@ export default function ProductsPage() {
 
           <div className="flex items-center gap-2">
             <Link
+              href="/dashboard"
+              className="text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-colors"
+            >
+              대시보드
+            </Link>
+            <Link
               href="/onboarding"
-              className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 px-3 py-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors hidden sm:inline-block"
+              className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 px-3 py-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors hidden sm:inline-block"
             >
               온보딩 설정
             </Link>
