@@ -114,16 +114,18 @@
 
 ---
 
-## Phase 5. 개인화 일일 스킨케어 추천 엔진 — SPEC 기능 3
+## Phase 5. 개인화 일일 스킨케어 추천 엔진 — SPEC 기능 3 ✅ 백엔드 완료 (2026-08-14, mock 날씨 기준)
 
-> Phase 2(개인 설정) + Phase 3(보유 제품) + Phase 4(날씨) 결과를 종합하는 핵심 로직. 세 Phase가 끝나야 완전한 형태로 동작하지만, 목(mock) 데이터로 먼저 개발 시작 가능.
+> Phase 2(개인 설정) + Phase 3(보유 제품) + Phase 4(날씨) 결과를 종합하는 핵심 로직. Phase 4가 아직 안 끝나서 **mock 날씨 값(CLEAR, UV 7)** 으로 먼저 구현했습니다. `feature/phase5-recommendation` 브랜치.
 
 ### 🔧 백엔드
-1. 추천 규칙 정의 (예: UV 높음 → 아침 자외선 차단 강조 / 건조 → 보습 중심 / 레티놀 보유 → 취침 전 사용 안내)
-2. 추천 생성 로직 구현: 세안법 + 권장 제품(군) + 루틴 순서 산출
-3. 제품 사용 주기 도래 여부 반영 (Phase 3의 `nextUseDate` 참조)
-4. 결과에 "일반적인 생활 관리 안내" 문구(면책 조항) 포함
-5. 일일 추천 조회 API (`GET /api/recommendations/today`)
+1. [x] 추천 규칙 정의 및 구현 (`com.skinclock.recommendation.RecommendationService`): UV≥6 → 자외선 차단 강조 / 날씨 DRY → 보습 한 겹 추가 / 레티놀·AHA_BHA 보유 제품(Product.nightOnly) → NIGHT 슬롯 + `NIGHT_ONLY` 배지로 취침 전 안내
+2. [x] 추천 생성 로직: 세안법(피부타입별 문구) + 루틴 순서(`stepOrder`) 산출 — `DailyRecommendation`/`RecommendationStep` 엔티티
+3. [x] 제품 사용 주기 도래 여부 반영 (Phase 3의 `Product.nextUseDate(today)` 그대로 재사용)
+4. [x] 결과에 "일반적인 생활 관리 안내" 문구(면책 조항) 포함 — `disclaimer` 필드
+5. [x] `GET /api/recommendations/today` (당일 1건 캐시, 없으면 생성) / `POST /api/recommendations/today/refresh` (강제 재계산)
+6. [x] **Phase 4 연동 지점 분리**: 날씨 조회를 `TodayWeatherProvider` 인터페이스로 분리하고 `MockTodayWeatherProvider`(CLEAR·UV 7 고정)로 구현해둠. Phase 4가 끝나면 이 인터페이스의 실제 구현체로 교체만 하면 됨 — `RecommendationService` 등 나머지 코드는 안 건드려도 됨
+7. [x] curl 스모크 테스트: 온보딩 전 404, 프로필+제품 등록 후 추천 생성(높은 UV/야간전용 배지/주기 도래 제품 반영 확인), 재조회 시 캐시(중복 생성 없음), refresh 정상, 타 사용자 격리
 
 ### 🎨 프론트엔드 (참고용)
 - 대시보드(`/dashboard`) 오늘의 추천 루틴 카테고리(아침/귀가 후/취침 전) 및 체크리스트
