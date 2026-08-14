@@ -2,6 +2,7 @@ package com.skinclock.notification;
 
 import com.skinclock.common.NotFoundException;
 import com.skinclock.notification.dto.NotificationResponse;
+import com.skinclock.notification.dto.NotificationStatusUpdateRequest;
 import com.skinclock.product.Product;
 import com.skinclock.product.ProductRepository;
 import com.skinclock.recommendation.DailyRecommendation;
@@ -9,6 +10,8 @@ import com.skinclock.recommendation.DailyRecommendationRepository;
 import com.skinclock.recommendation.RecommendationService;
 import com.skinclock.recommendation.RecommendationStep;
 import com.skinclock.recommendation.TimeSlot;
+import com.skinclock.routine.RoutineLog;
+import com.skinclock.routine.RoutineLogRepository;
 import com.skinclock.user.User;
 import com.skinclock.user.UserService;
 import com.skinclock.weather.WeatherService;
@@ -21,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class NotificationService {
@@ -32,6 +34,7 @@ public class NotificationService {
             "SkinClock의 안내는 일반적인 생활 습관 관리 참고용이며, 의학적 진단이나 처방을 대신하지 않습니다.";
 
     private final NotificationRepository notificationRepository;
+    private final RoutineLogRepository routineLogRepository;
     private final RecommendationService recommendationService;
     private final DailyRecommendationRepository dailyRecommendationRepository;
     private final WeatherService weatherService;
@@ -40,6 +43,7 @@ public class NotificationService {
 
     public NotificationService(
             NotificationRepository notificationRepository,
+            RoutineLogRepository routineLogRepository,
             RecommendationService recommendationService,
             DailyRecommendationRepository dailyRecommendationRepository,
             WeatherService weatherService,
@@ -47,6 +51,7 @@ public class NotificationService {
             UserService userService
     ) {
         this.notificationRepository = notificationRepository;
+        this.routineLogRepository = routineLogRepository;
         this.recommendationService = recommendationService;
         this.dailyRecommendationRepository = dailyRecommendationRepository;
         this.weatherService = weatherService;
@@ -55,7 +60,7 @@ public class NotificationService {
     }
 
     // ─────────────────────────────────────────────
-    // 1. 아침 브리핑
+    // 1. 아침 브리핑 (Phase 6)
     // ─────────────────────────────────────────────
 
     @Transactional
@@ -125,7 +130,7 @@ public class NotificationService {
     }
 
     // ─────────────────────────────────────────────
-    // 2. 귀가 브리핑
+    // 2. 귀가 브리핑 (Phase 6)
     // ─────────────────────────────────────────────
 
     @Transactional
@@ -189,7 +194,7 @@ public class NotificationService {
     }
 
     // ─────────────────────────────────────────────
-    // 3. 제품 사용 주기 알림
+    // 3. 제품 사용 주기 알림 (Phase 6)
     // ─────────────────────────────────────────────
 
     @Transactional
@@ -227,6 +232,36 @@ public class NotificationService {
         }
 
         return created;
+    }
+
+    // ─────────────────────────────────────────────
+    // 4. 알림 목록 조회 & 상태 처리 (Phase 7)
+    // ─────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public List<NotificationResponse> list(String clientUserId, NotificationStatus status, NotificationType type) {
+        return notificationRepository.findAllByUser_ClientUserIdOrderByCreatedAtDesc(clientUserId).stream()
+                .filter(n -> status == null || n.getStatus() == status)
+                .filter(n -> type == null || n.getType() == type)
+                .map(NotificationResponse::from)
+                .toList();
+    }
+
+    @Transactional
+    public NotificationResponse updateStatus(String clientUserId, Long notificationId, NotificationStatusUpdateRequest request) {
+        request.validateProcessable();
+
+        Notification notification = notificationRepository.findByIdAndUser_ClientUserId(notificationId, clientUserId)
+                .orElseThrow(() -> new NotFoundException("NOTIFICATION_NOT_FOUND", "알림을 찾을 수 없습니다."));
+
+        notification.updateStatus(request.status());
+
+        RoutineLog routineLog = routineLogRepository.findByNotification_Id(notificationId)
+                .orElseGet(() -> new RoutineLog(notification.getUser(), notification, notification.getDate(), notification.getType()));
+        routineLog.applyStatus(request.status());
+        routineLogRepository.save(routineLog);
+
+        return NotificationResponse.from(notification);
     }
 
     // ─────────────────────────────────────────────

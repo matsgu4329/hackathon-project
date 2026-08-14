@@ -18,6 +18,9 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     /** Check if a PRODUCT_CYCLE notification already exists for this user+product today. */
     boolean existsByUserAndTypeAndProductIdAndDate(User user, NotificationType type, Long productId, LocalDate date);
 
-    /** Find all notifications for a user (for Phase 7 listing). */
+    /** Find all notifications for a user (Phase 7 listing). */
     List<Notification> findAllByUser_ClientUserIdOrderByCreatedAtDesc(String clientUserId);
+
+    /** Ownership check for Phase 7 status updates. */
+    Optional<Notification> findByIdAndUser_ClientUserId(Long id, String clientUserId);
 }

@@ -135,15 +135,15 @@
 
 ---
 
-## Phase 6. 아침·귀가 브리핑 알림 생성 — SPEC 기능 5
+## Phase 6. 아침·귀가 브리핑 알림 생성 — SPEC 기능 5 ✅ 백엔드 완료 (2026-08-14, 팀원 담당)
 
 > Phase 5의 추천 결과를 알림 형태로 변환.
 
 ### 🔧 백엔드
-1. 아침 브리핑 생성 로직: 날씨·자외선 정보 + 권장 세안법 + 권장 제품 포함
-2. 귀가 브리핑 생성 로직: 세안/저녁 루틴 안내 포함 (실제 위치 추적 대신 모의 귀가 이벤트 트리거, `POST /api/situations/homecoming`)
-3. 발송 트리거 조건: 외출 패턴 또는 사용자가 설정한 알림 시간 기준
-4. 중복 생성 방지 로직 (동일 유형·동일 발송 시점 체크)
+1. [x] 아침 브리핑 생성 로직 (`NotificationService.createMorningBriefing`): 날씨·자외선 정보 + 권장 세안법 + 아침 루틴 요약 포함, `POST /api/notifications/morning-briefing/trigger`
+2. [x] 귀가 브리핑 생성 로직 (`createHomecomingBriefing`): 세안/저녁 루틴 안내 포함, `POST /api/situations/homecoming`
+3. [x] `NotificationScheduler` — 매분 전체 `UserProfile` 순회, `preferredNotificationTime`(기본 08:00) 도달 시 아침 브리핑 + 제품 주기 알림 자동 생성
+4. [x] 중복 생성 방지: `(user, type, date)` / `(user, type, product, date)` 조합 조회 후 이미 있으면 기존 알림 그대로 반환
 
 ### 🎨 프론트엔드 (참고용)
 - 귀가 모의 입력 버튼(`<ScenarioSimulatorBar/>`) → `POST /api/situations/homecoming` 호출 → 알림 생성 확인
@@ -152,16 +152,21 @@
 
 ---
 
-## Phase 7. 웹 알림 확인 및 루틴 이행 기록 — SPEC 기능 6
+## Phase 7. 웹 알림 확인 및 루틴 이행 기록 — SPEC 기능 6 ✅ 백엔드 완료 (2026-08-14, Phase 6 병합 완료)
 
-> Phase 6에서 생성된 알림을 사용자가 소비하고 처리하는 마지막 단계.
+> Phase 6에서 생성된 알림을 사용자가 소비하고 처리하는 마지막 단계. Phase 6이 main에 없는 상태에서 병행 진행하다가, Phase 6이 merge된 뒤 `feature/phase7-notification-history`에 `origin/main`을 merge하며 예상했던 대로 `Notification.java`/`NotificationRepository.java`/`NotificationController.java`/`NotificationService.java` 4개 파일에서 충돌이 나 수동으로 합쳤습니다. `NotificationStatus`/`NotificationType`/`dto/NotificationResponse.java`는 두 브랜치가 완전히 동일하게 작성해서 충돌 없이 합쳐짐.
+
+**병합 시 확정한 것**: `Notification` 엔티티는 Phase 6 버전(명시적 `date` 필드, `updateStatus()` 메서드명)을 채택. `NotificationController`는 클래스 레벨 매핑 없이 절대경로 방식(Phase 6 스타일)으로 통일, Phase 7의 목록/상태변경 엔드포인트를 같은 파일에 추가. `NotificationService`는 Phase 6의 생성 로직(아침/귀가 브리핑, 제품주기) + Phase 7의 조회/상태변경(`list`, `updateStatus`)을 한 클래스에 합치고 `RoutineLogRepository`를 생성자에 추가.
 
 ### 🔧 백엔드
-1. 알림 목록 조회 API (`GET /api/notifications`, 유형/내용/생성 시각)
-2. 알림 상태 처리 API (`PATCH /api/notifications/{id}/status`): 완료 / 나중에 확인 / 닫힘
-3. `RoutineLog` 기록: 날짜, 알림 유형, 처리 시각, 완료 상태
-4. 이행 기록 조회 API (`GET /api/routine-logs`, `GET /api/routine-logs/summary`)
-5. (선택) 웹 푸시 구독 저장 API (`POST /api/push/subscriptions`) — 실제 푸시 발송은 스트레치 목표
+1. [x] `Notification` 엔티티/Repository/enum — Phase 6·7 공동 소유로 확정 (병합 완료)
+2. [x] 알림 목록 조회 API (`GET /api/notifications`, `status`/`type` 쿼리 필터)
+3. [x] 알림 상태 처리 API (`PATCH /api/notifications/{id}/status`): COMPLETED / LATER / DISMISSED (PENDING으로는 되돌릴 수 없도록 검증)
+4. [x] `RoutineLog` 엔티티/Repository (`com.skinclock.routine`, notification당 1건 upsert) — 날짜, 알림 유형, 처리 시각, 완료 상태 기록
+5. [x] 이행 기록 조회 API (`GET /api/routine-logs?from&to`, `GET /api/routine-logs/summary?yearMonth`) — 캘린더 히트맵용 일자별 COMPLETE/PARTIAL/NONE, 스트릭(최근 90일 기준 연속 COMPLETE 일수), 월간 완료율 계산
+6. [x] 사용자별 데이터 격리: 소유자 아닌 알림 상태 변경 시 404
+7. [x] **검증**: 병합 전엔 MockMvc 통합 테스트(`NotificationRoutineLogIntegrationTest`)로 시드 데이터 기반 검증, 병합 후엔 실제 서버로 온보딩→제품 등록→아침 브리핑 트리거(중복 방지 확인)→귀가 브리핑→목록 조회→상태 변경(COMPLETED/LATER)→월간 요약까지 curl로 end-to-end 재확인. `./mvnw.cmd test` 2/2 통과
+8. [ ] (선택) 웹 푸시 구독 저장 API (`POST /api/push/subscriptions`) — 스트레치 목표, 미구현
 
 ### 🎨 프론트엔드 (참고용)
 - `/notifications`(알림 센터), `/history`(이행 리포트, 캘린더 히트맵)
